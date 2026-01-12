@@ -44,7 +44,19 @@ Go to [Releases](../../releases/latest) and download:
 
 ### Step 3: Run it
 
-Double-click the launcher and select a mode from the menu!
+**Windows:** Double-click the `.exe` file.
+
+**Linux:** Open terminal and run:
+```bash
+chmod +x eSim-Launcher-Linux
+./eSim-Launcher-Linux
+```
+
+**macOS:** Open terminal and run:
+```bash
+chmod +x eSim-Launcher-macOS
+./eSim-Launcher-macOS
+```
 
 ---
 
