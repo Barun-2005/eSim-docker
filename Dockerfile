@@ -85,7 +85,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 libfontconfig1 libfreetype6 \
     tigervnc-standalone-server tigervnc-common \
     xfce4 xfce4-terminal novnc websockify \
-    xdotool wmctrl openbox \
+    xdotool wmctrl openbox tint2 \
     && rm -rf /var/lib/apt/lists/* && apt-get clean
 
 # Copy built artifacts from builder stage
@@ -129,9 +129,9 @@ RUN mkdir -p /home/${USERNAME}/.config/kicad/6.0 \
     && echo '(fp_lib_table)' > ${KICAD_CONFIG}/fp-lib-table \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config
 
-# Setup VNC
+# Setup VNC with openbox + tint2 taskbar
 RUN mkdir -p /home/${USERNAME}/.vnc \
-    && printf '#!/bin/bash\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexport XDG_RUNTIME_DIR=/tmp/runtime-esim-user\nmkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR\nexec startxfce4\n' \
+    && printf '#!/bin/bash\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexport XDG_RUNTIME_DIR=/tmp/runtime-esim-user\nmkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR\ntint2 &\nexec openbox-session\n' \
     > /home/${USERNAME}/.vnc/xstartup \
     && chmod +x /home/${USERNAME}/.vnc/xstartup \
     && printf '\x9f\x87\x18\xb4\x8e\x8f\x8a\x57' > /home/${USERNAME}/.vnc/passwd \
