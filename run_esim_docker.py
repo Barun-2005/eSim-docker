@@ -14,10 +14,10 @@ import socket
 import webbrowser
 import time
 import tempfile
+import urllib.request
 from pathlib import Path
-from typing import Tuple, Optional
 
-# Docker image to pull (GitHub Container Registry)
+# Docker image (GitHub Container Registry)
 DOCKER_IMAGE = "ghcr.io/barun-2005/esim-docker:latest"
 LOCAL_IMAGE = "esim:latest"
 CONTAINER_NAME = "esim-container"
@@ -31,24 +31,20 @@ VCXSRV_CONFIG = """<?xml version="1.0" encoding="UTF-8"?>
 
 
 def run_cmd(cmd, capture=False, check=True, shell=False):
-    """Run a shell command."""
     if capture:
         return subprocess.run(cmd, capture_output=True, text=True, check=check, shell=shell)
     return subprocess.run(cmd, check=check, shell=shell)
 
 
 def cmd_exists(cmd):
-    """Check if command is available."""
     return shutil.which(cmd) is not None
 
 
 def clear():
-    """Clear terminal."""
     os.system('cls' if os.name == 'nt' else 'clear')
 
 
 def show_banner():
-    """Show the launcher banner."""
     clear()
     print("""
     ╔══════════════════════════════════════════╗
@@ -72,7 +68,6 @@ def err(msg):
 
 
 def find_free_port(start=6080, tries=20):
-    """Find an available port."""
     for port in range(start, start + tries):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -83,8 +78,21 @@ def find_free_port(start=6080, tries=20):
     raise RuntimeError(f"No free port found between {start}-{start+tries}")
 
 
+def wait_for_port(port, timeout=30):
+    """Wait until a port is accepting connections."""
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.settimeout(1)
+                s.connect(('localhost', port))
+                return True
+        except (OSError, socket.timeout):
+            time.sleep(0.5)
+    return False
+
+
 def get_os():
-    """Detect operating system."""
     system = platform.system().lower()
     if system == "linux":
         try:
@@ -102,54 +110,115 @@ def get_os():
 
 
 def is_wslg():
-    """Check for WSLg support."""
     return (get_os() == "wsl2" and 
             os.environ.get("WAYLAND_DISPLAY") and 
             Path("/mnt/wslg").exists())
 
 
-# Windows-specific installers
+# Docker installation helpers
+
+def open_url(url):
+    """Open URL in browser."""
+    try:
+        webbrowser.open(url)
+        return True
+    except:
+        return False
+
 
 def install_docker_windows():
-    """Try to install Docker on Windows via winget."""
-    info("Docker not found. Trying to install with winget...")
+    """Install Docker on Windows via winget."""
+    info("Docker Desktop is not running or not installed.")
     print()
-    resp = input("  Install Docker Desktop? (y/n): ").strip().lower()
+    print("  Docker Desktop is required to run eSim.")
+    print()
+    resp = input("  Install Docker Desktop now? (y/n): ").strip().lower()
     if resp != 'y':
-        warn("Skipped Docker installation")
+        print()
+        info("You can install Docker manually from:")
+        info("https://www.docker.com/products/docker-desktop")
         return False
+    
+    # Check if winget exists
+    if not cmd_exists("winget"):
+        info("Opening Docker download page...")
+        open_url("https://www.docker.com/products/docker-desktop")
+        info("Please install Docker Desktop and restart this launcher.")
+        return False
+    
     try:
+        info("Installing Docker Desktop (this takes a few minutes)...")
         subprocess.run(["winget", "install", "-e", "--id", "Docker.DockerDesktop", 
                        "--accept-source-agreements"], check=True)
-        ok("Docker installed! Please restart your computer.")
-        input("\n  Press Enter...")
+        print()
+        ok("Docker Desktop installed!")
+        warn("Please RESTART your computer, then run this launcher again.")
+        input("\n  Press Enter to exit...")
         return True
     except Exception as e:
         err(f"Install failed: {e}")
-        info("Download manually: https://docker.com/products/docker-desktop")
+        info("Opening Docker download page...")
+        open_url("https://www.docker.com/products/docker-desktop")
         return False
+
+
+def guide_docker_linux():
+    """Guide user to install Docker on Linux."""
+    info("Docker is not running or not installed.")
+    print()
+    print("  To install Docker on Linux, run these commands:")
+    print()
+    print("    curl -fsSL https://get.docker.com | sudo sh")
+    print("    sudo usermod -aG docker $USER")
+    print("    # Then log out and log back in")
+    print()
+    print("  After installation, start Docker:")
+    print("    sudo systemctl start docker")
+    print()
+    resp = input("  Open Docker installation guide? (y/n): ").strip().lower()
+    if resp == 'y':
+        open_url("https://docs.docker.com/engine/install/")
+
+
+def guide_docker_macos():
+    """Guide user to install Docker on macOS."""
+    info("Docker Desktop is not running or not installed.")
+    print()
+    print("  Docker Desktop is required to run eSim.")
+    print()
+    resp = input("  Open Docker download page? (y/n): ").strip().lower()
+    if resp == 'y':
+        open_url("https://www.docker.com/products/docker-desktop")
+    print()
+    info("After installing, open Docker Desktop and wait for it to start.")
 
 
 def install_vcxsrv_windows():
     """Install VcXsrv on Windows."""
-    info("VcXsrv not found (needed for X11 mode)")
-    resp = input("  Install VcXsrv? (y/n): ").strip().lower()
+    info("VcXsrv is needed for native window mode on Windows.")
+    resp = input("  Install VcXsrv now? (y/n): ").strip().lower()
     if resp != 'y':
         return False
+    
+    if not cmd_exists("winget"):
+        info("Opening VcXsrv download page...")
+        open_url("https://sourceforge.net/projects/vcxsrv/")
+        return False
+    
     try:
+        info("Installing VcXsrv...")
         subprocess.run(["winget", "install", "-e", "--id", "marha.VcXsrv",
                        "--accept-source-agreements"], check=True)
         ok("VcXsrv installed!")
         return True
     except:
         err("Install failed")
-        info("Download: https://sourceforge.net/projects/vcxsrv/")
+        open_url("https://sourceforge.net/projects/vcxsrv/")
         return False
 
 
 def start_vcxsrv():
     """Start VcXsrv X server on Windows."""
-    # Common install paths
     paths = [
         Path(os.environ.get("PROGRAMFILES", "")) / "VcXsrv" / "vcxsrv.exe",
         Path(os.environ.get("PROGRAMFILES(X86)", "")) / "VcXsrv" / "vcxsrv.exe",
@@ -169,7 +238,7 @@ def start_vcxsrv():
                 vcxsrv = p
                 break
         if not vcxsrv:
-            err("VcXsrv not found after install")
+            err("VcXsrv not found")
             return False
     
     # Check if already running
@@ -199,7 +268,7 @@ def start_vcxsrv():
         ok("VcXsrv started")
         return True
     except Exception as e:
-        err(f"Failed to start VcXsrv: {e}")
+        err(f"Failed: {e}")
         return False
 
 
@@ -218,7 +287,6 @@ def get_display_args(os_type):
             display = os.environ.get("DISPLAY", ":0")
             return display, ["-e", f"DISPLAY={display}", "-e", "QT_QPA_PLATFORM=xcb",
                            "-v", "/tmp/.X11-unix:/tmp/.X11-unix:rw"]
-        # Legacy WSL2
         try:
             with open("/etc/resolv.conf") as f:
                 for line in f:
@@ -248,7 +316,6 @@ def get_display_args(os_type):
 # Docker operations
 
 def docker_ok():
-    """Check if Docker is installed and running."""
     if not cmd_exists("docker"):
         return False
     try:
@@ -259,7 +326,6 @@ def docker_ok():
 
 
 def image_exists(image):
-    """Check if Docker image exists locally."""
     try:
         result = run_cmd(["docker", "images", "-q", image], capture=True)
         return bool(result.stdout.strip())
@@ -268,9 +334,8 @@ def image_exists(image):
 
 
 def pull_image(image=DOCKER_IMAGE):
-    """Pull image from registry."""
     info(f"Pulling {image}...")
-    info("This may take a few minutes...")
+    info("This may take a few minutes on first run...")
     print()
     try:
         subprocess.run(["docker", "pull", image], check=True)
@@ -283,13 +348,12 @@ def pull_image(image=DOCKER_IMAGE):
 
 
 def build_image():
-    """Build image from local Dockerfile."""
     dockerfile = DOCKERFILE_DIR / "Dockerfile"
     if not dockerfile.exists():
         err(f"Dockerfile not found: {dockerfile}")
         return False
     
-    info("Building from Dockerfile (this takes 10-15 min)...")
+    info("Building from Dockerfile (10-15 min)...")
     print()
     try:
         subprocess.run(["docker", "build", "-t", LOCAL_IMAGE, str(DOCKERFILE_DIR)], check=True)
@@ -302,23 +366,19 @@ def build_image():
 
 
 def stop_container():
-    """Remove existing container if running."""
     run_cmd(["docker", "rm", "-f", CONTAINER_NAME], capture=True, check=False)
 
 
 def get_workspace():
-    """Create and return workspace path."""
     ws = Path.home() / WORKSPACE_DIR_NAME
     ws.mkdir(exist_ok=True)
     return ws
 
 
 def get_image(build_local=False):
-    """Get the Docker image to use."""
     if build_local:
         return LOCAL_IMAGE if build_image() else None
     
-    # Try remote first
     if image_exists(DOCKER_IMAGE):
         return DOCKER_IMAGE
     
@@ -326,7 +386,6 @@ def get_image(build_local=False):
     if pull_image(DOCKER_IMAGE):
         return DOCKER_IMAGE
     
-    # Fallback to local
     if image_exists(LOCAL_IMAGE):
         warn(f"Using local image: {LOCAL_IMAGE}")
         return LOCAL_IMAGE
@@ -360,32 +419,52 @@ def launch_vnc(image, workspace):
     
     print()
     print("  " + "=" * 50)
-    ok("VNC Mode")
+    ok("Starting VNC Mode...")
     print()
-    print(f"     Browser: {url}")
-    print(f"     VNC:     localhost:{server_port}")
+    print(f"     Browser URL: {url}")
+    print(f"     VNC Server:  localhost:{server_port}")
     print()
-    print("     Opening browser...")
+    print("     Waiting for container to start...")
     print("  " + "=" * 50)
     print()
     
-    # Open browser after delay
-    def open_browser():
-        time.sleep(3)
-        webbrowser.open(url)
-    
+    # Start container in background thread and wait for port
     import threading
-    threading.Thread(target=open_browser, daemon=True).start()
+    container_started = threading.Event()
     
-    return subprocess.run(cmd).returncode
+    def run_container():
+        subprocess.run(cmd)
+        container_started.set()
+    
+    thread = threading.Thread(target=run_container, daemon=True)
+    thread.start()
+    
+    # Wait for VNC port to be ready, then open browser
+    info("Waiting for eSim to start...")
+    if wait_for_port(vnc_port, timeout=30):
+        time.sleep(2)  # Extra delay for noVNC to initialize
+        ok("Opening browser...")
+        webbrowser.open(url)
+    else:
+        warn("Container is starting slowly. Please open manually:")
+        print(f"     {url}")
+    
+    # Wait for container to finish
+    thread.join()
+    return 0
 
 
 def launch_x11(image, workspace, os_type):
     """Run eSim in X11 mode (native window)."""
     if os_type == "windows":
         if not start_vcxsrv():
-            err("X11 server not available")
+            err("X11 server not available. Try VNC mode instead.")
             return 1
+    
+    if os_type == "macos":
+        info("Make sure XQuartz is running (download from xquartz.org)")
+        info("Run 'xhost +localhost' in terminal if needed")
+        print()
     
     display, display_args = get_display_args(os_type)
     stop_container()
@@ -398,8 +477,10 @@ def launch_x11(image, workspace, os_type):
     
     print()
     print("  " + "=" * 50)
-    ok("X11 Mode")
+    ok("Starting X11 Mode")
     print(f"     Display: {display}")
+    if os_type in ["windows", "macos"]:
+        print("     Note: KiCad schematic editor may lag slightly")
     print("  " + "=" * 50)
     print()
     
@@ -408,14 +489,25 @@ def launch_x11(image, workspace, os_type):
 
 # Menu system
 
-def show_menu():
-    """Display interactive menu."""
+def show_menu(os_type):
+    """Display interactive menu based on OS."""
     show_banner()
-    os_type = get_os()
     print(f"  OS: {os_type.upper()}")
     print()
-    print("  1. Launch VNC Mode (Browser)")
-    print("  2. Launch X11 Mode (Native Window)")
+    
+    if os_type == "linux":
+        # Linux: X11 first (recommended)
+        print("  1. Launch X11 Mode (Recommended)")
+        print("  2. Launch VNC Mode (Browser)")
+    else:
+        # Windows/Mac: VNC first (recommended)
+        print("  1. Launch VNC Mode (Recommended - Browser)")
+        print("  2. Launch X11 Mode (Native Window)")
+        if os_type == "windows":
+            print("     [KiCad may lag, auto-installs VcXsrv if needed]")
+        elif os_type == "macos":
+            print("     [Requires XQuartz, KiCad may lag]")
+    
     print("  3. Update Image")
     print("  4. Build from Source")
     print("  0. Exit")
@@ -423,10 +515,24 @@ def show_menu():
     return input("  Choice: ").strip()
 
 
+def handle_docker_missing(os_type):
+    """Handle case when Docker is not available."""
+    if os_type == "windows":
+        install_docker_windows()
+    elif os_type == "linux":
+        guide_docker_linux()
+    elif os_type == "macos":
+        guide_docker_macos()
+    else:
+        err("Docker is required. Please install Docker Desktop.")
+    input("\n  Press Enter to continue...")
+
+
 def run_menu():
     """Interactive menu loop."""
     while True:
-        choice = show_menu()
+        os_type = get_os()
+        choice = show_menu(os_type)
         
         if choice == "0":
             print()
@@ -441,20 +547,10 @@ def run_menu():
         # Check Docker
         print()
         if not docker_ok():
-            os_type = get_os()
-            if os_type == "windows":
-                err("Docker not running or not installed")
-                if not install_docker_windows():
-                    input("\n  Press Enter...")
-                    continue
-                return 0
-            else:
-                err("Docker not running. Start Docker Desktop first.")
-                input("\n  Press Enter...")
-                continue
+            handle_docker_missing(os_type)
+            continue
         
         ok("Docker ready")
-        os_type = get_os()
         workspace = get_workspace()
         ok(f"Workspace: {workspace}")
         
@@ -476,10 +572,19 @@ def run_menu():
             input("\n  Press Enter...")
             continue
         
-        if choice == "1":
-            return launch_vnc(image, workspace)
-        if choice == "2":
-            return launch_x11(image, workspace, os_type)
+        # Launch based on OS and choice
+        if os_type == "linux":
+            # Linux: 1=X11, 2=VNC
+            if choice == "1":
+                return launch_x11(image, workspace, os_type)
+            else:
+                return launch_vnc(image, workspace)
+        else:
+            # Windows/Mac: 1=VNC, 2=X11
+            if choice == "1":
+                return launch_vnc(image, workspace)
+            else:
+                return launch_x11(image, workspace, os_type)
     
     return 0
 
@@ -487,7 +592,6 @@ def run_menu():
 # CLI mode
 
 def run_cli(args):
-    """Handle command-line arguments."""
     import argparse
     
     parser = argparse.ArgumentParser(description="eSim Docker Launcher")
@@ -498,17 +602,12 @@ def run_cli(args):
     parser.add_argument("--shell", "-s", action="store_true", help="Open shell only")
     
     opts = parser.parse_args(args)
+    os_type = get_os()
     
     if not docker_ok():
-        os_type = get_os()
-        if os_type == "windows":
-            err("Docker not running")
-            install_docker_windows()
-            return 1
-        err("Docker not running")
+        handle_docker_missing(os_type)
         return 1
     
-    os_type = get_os()
     workspace = get_workspace()
     
     if opts.pull:
@@ -530,6 +629,10 @@ def run_cli(args):
     if opts.x11:
         return launch_x11(image, workspace, os_type)
     
+    # Default: VNC for Windows/Mac, X11 for Linux
+    if os_type == "linux" and not opts.vnc:
+        return launch_x11(image, workspace, os_type)
+    
     return launch_vnc(image, workspace)
 
 
@@ -537,7 +640,6 @@ def run_cli(args):
 
 def main():
     if len(sys.argv) == 1:
-        # No args = interactive menu
         try:
             return run_menu()
         except KeyboardInterrupt:
@@ -545,7 +647,6 @@ def main():
             info("Cancelled")
             return 0
     else:
-        # CLI mode
         show_banner()
         try:
             return run_cli(sys.argv[1:])

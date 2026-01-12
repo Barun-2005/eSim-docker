@@ -21,8 +21,6 @@
 
 This project provides a Docker-based solution to run **eSim** (Electronic Circuit Simulation) on any operating system. eSim is developed by FOSSEE, IIT Bombay and integrates KiCad, Ngspice, and Python for circuit design and simulation.
 
-Instead of going through the complex native installation, you can just download our launcher and start using eSim in minutes.
-
 **What's included:**
 - KiCad for schematic design
 - Ngspice for SPICE simulation  
@@ -35,7 +33,7 @@ Instead of going through the complex native installation, you can just download 
 
 ### Step 1: Get Docker
 
-Download and install [Docker Desktop](https://www.docker.com/products/docker-desktop) for your OS.
+Download [Docker Desktop](https://www.docker.com/products/docker-desktop) and make sure it's running.
 
 ### Step 2: Download the Launcher
 
@@ -46,38 +44,30 @@ Go to [Releases](../../releases/latest) and download:
 
 ### Step 3: Run it
 
-Double-click the launcher. You'll see a menu:
-
-```
-1. Launch VNC Mode (Browser - Recommended)
-2. Launch Native X11 Mode  
-3. Update / Reinstall Image
-4. Build from Source
-0. Exit
-```
-
-Choose option 1 and eSim will open in your browser!
-
-<!-- 
-Screenshot placeholder - add actual screenshot here
-![eSim in VNC Mode](screenshots/vnc_mode.png)
--->
+Double-click the launcher and select a mode from the menu!
 
 ---
 
-## How it Works
+## Display Modes
 
-The launcher pulls a pre-built Docker image (~1.5GB download) containing the complete eSim environment. Your projects are saved to `~/eSim_Workspace` on your computer, so they persist even after closing the container.
+The launcher offers two display modes:
 
-**VNC Mode** opens eSim in your web browser - works everywhere, no extra software needed.
+| Mode | Best For | How it Works |
+|------|----------|--------------|
+| **VNC** | Windows, macOS | Opens eSim in your browser. Works everywhere, no setup needed. |
+| **X11** | Linux | Opens eSim in a native window. Best performance on Linux. |
 
-**X11 Mode** opens eSim in a native window - requires an X server (VcXsrv on Windows, XQuartz on macOS).
+### Recommendations
+
+- **Linux** → Use X11 mode (recommended, no lag)
+- **Windows** → Use VNC mode (X11 works but KiCad may lag)
+- **macOS** → Use VNC mode (X11 requires XQuartz)
+
+Both modes work on all platforms - the launcher will guide you through any required setup.
 
 ---
 
 ## Command Line Usage
-
-If you prefer the terminal:
 
 ```bash
 # Interactive menu
@@ -86,50 +76,52 @@ python run_esim_docker.py
 # Direct VNC mode
 python run_esim_docker.py --vnc
 
-# Direct X11 mode
+# Direct X11 mode  
 python run_esim_docker.py --x11
 
-# Force update image
+# Update image
 python run_esim_docker.py --pull
 ```
+
+---
+
+## Workspace
+
+Your projects are saved to:
+
+| OS | Location |
+|----|----------|
+| Windows | `C:\Users\<you>\eSim_Workspace` |
+| Linux/macOS | `~/eSim_Workspace` |
+
+This folder is mounted into the container, so your files persist.
 
 ---
 
 ## Troubleshooting
 
 ### Docker not running
-Make sure Docker Desktop is open and fully started (the whale icon should be stable).
+Open Docker Desktop and wait for it to fully start.
 
-### Port already in use
-The launcher auto-finds free ports. If it still fails, restart your computer.
+### Browser shows "localhost not found"
+Wait a few seconds and refresh. The container needs time to start.
 
-### VNC shows blank/error
-Wait a few seconds and refresh the browser. eSim takes a moment to start.
+### VNC shows blank screen
+Refresh the browser page. If still blank, restart the launcher.
 
-### Windows: Virtualization error
-Enable Intel VT-x or AMD-V in your BIOS settings.
+### X11 mode: window doesn't appear (Windows)
+Make sure VcXsrv is running. The launcher auto-installs it if needed.
+
+### X11 mode: window doesn't appear (macOS)
+Install XQuartz from xquartz.org, then run `xhost +localhost` in terminal.
 
 ---
 
 ## Building from Source
 
-If you want to build the Docker image yourself instead of pulling:
-
 ```bash
 docker build -t esim:latest .
 python run_esim_docker.py --build
-```
-
----
-
-## Project Structure
-
-```
-├── Dockerfile           # Multi-stage Docker build
-├── run_esim_docker.py   # Launcher script
-├── eSim.spec            # PyInstaller config
-├── README.md            # This file
-└── .github/workflows/   # CI/CD for releases
 ```
 
 ---
@@ -141,10 +133,10 @@ python run_esim_docker.py --build
 - **Ngspice** - Ngspice Team
 - **GAW3** - Hervé Quillévéré, Stefan Schippers
 
-This Docker launcher was created as part of the FOSSEE Internship program.
+Created as part of the FOSSEE Internship program.
 
 ---
 
 ## License
 
-GPL-3.0 - Same as eSim
+GPL-3.0
