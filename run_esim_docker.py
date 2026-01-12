@@ -79,16 +79,15 @@ def find_free_port(start=6080, tries=20):
 
 
 def wait_for_port(port, timeout=30):
-    """Wait until a port is accepting connections."""
+    """Wait until noVNC HTTP server is responding."""
     start = time.time()
     while time.time() - start < timeout:
         try:
-            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-                s.settimeout(1)
-                s.connect(('localhost', port))
-                return True
-        except (OSError, socket.timeout):
-            time.sleep(0.5)
+            req = urllib.request.urlopen(f"http://localhost:{port}/", timeout=2)
+            req.close()
+            return True
+        except:
+            time.sleep(1)
     return False
 
 
