@@ -441,8 +441,8 @@ def launch_vnc(image, workspace):
     
     # Wait for VNC port to be ready, then open browser
     info("Waiting for eSim to start...")
-    if wait_for_port(vnc_port, timeout=30):
-        time.sleep(2)  # Extra delay for noVNC to initialize
+    if wait_for_port(vnc_port, timeout=45):
+        time.sleep(5)  # Wait for noVNC and eSim to fully initialize
         ok("Opening browser...")
         webbrowser.open(url)
     else:
