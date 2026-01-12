@@ -144,10 +144,22 @@ RUN mkdir -p /home/${USERNAME}/.config/xfce4/xfconf/xfce-perchannel-xml \
     > /home/${USERNAME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config
 
-# Startup script - lowers splash window so dialogs are visible
-RUN printf '#!/bin/bash\nset -e\n\nWORKSPACE=/home/esim-user/eSim-Workspace\nif [ ! -f "$WORKSPACE/.examples_copied" ]; then\n    mkdir -p "$WORKSPACE"\n    cp -r /usr/local/esim/Examples/* "$WORKSPACE/" 2>/dev/null || true\n    touch "$WORKSPACE/.examples_copied"\nfi\n\nif [ "$1" = "--vnc" ] || [ "$USE_VNC" = "1" ]; then\n    echo "Starting eSim in VNC mode"\n    vncserver -kill :1 2>/dev/null || true\n    export XDG_RUNTIME_DIR=/tmp/runtime-esim-user\n    mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR\n    vncserver :1 -geometry ${VNC_RESOLUTION:-1920x1080} -depth ${VNC_DEPTH:-24} -SecurityTypes None\n    sleep 4\n    websockify --web=/usr/share/novnc/ ${NOVNC_PORT:-6080} localhost:5901 &\n    echo "VNC ready at http://localhost:${NOVNC_PORT:-6080}/vnc.html"\n    export DISPLAY=:1\n    sleep 2\n    # Background: lower large splash window so small dialogs are visible\n    (\n        sleep 3\n        for i in 1 2 3 4 5 6 7 8 9 10; do\n            for wid in $(wmctrl -l | grep -i esim | awk \"{print \\$1}\"); do\n                wmctrl -i -r $wid -b remove,above 2>/dev/null || true\n                wmctrl -i -r $wid -b add,below 2>/dev/null || true\n            done\n            for wid in $(xdotool search --name "eSim" 2>/dev/null); do\n                geo=$(xdotool getwindowgeometry $wid 2>/dev/null || echo "0x0")\n                w=$(echo "$geo" | grep -oE "[0-9]+x[0-9]+" | cut -dx -f1 || echo 0)\n                if [ "${w:-0}" -gt 500 ]; then\n                    xdotool windowlower $wid 2>/dev/null || true\n                fi\n            done\n            sleep 2\n        done\n    ) &\n    cd /usr/local/esim/src/frontEnd\n    python3 Application.py\n    tail -f /dev/null\nelse\n    echo "Starting eSim in X11 mode"\n    cd /usr/local/esim/src/frontEnd\n    exec python3 Application.py\nfi\n' \
+# Startup script - use openbox for better window focus handling in VNC
+RUN printf '#!/bin/bash\nset -e\n\n# Ensure workspace exists\nmkdir -p /home/esim-user/eSim-Workspace\ncp -r /usr/local/esim/Examples/* /home/esim-user/eSim-Workspace/ 2>/dev/null || true\n\nif [ "$1" = "--vnc" ] || [ "$USE_VNC" = "1" ]; then\n    echo "Starting eSim in VNC mode"\n    vncserver -kill :1 2>/dev/null || true\n    export XDG_RUNTIME_DIR=/tmp/runtime-esim-user\n    mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR\n    vncserver :1 -geometry ${VNC_RESOLUTION:-1920x1080} -depth ${VNC_DEPTH:-24} -SecurityTypes None\n    sleep 3\n    websockify --web=/usr/share/novnc/ ${NOVNC_PORT:-6080} localhost:5901 &\n    echo "VNC ready at http://localhost:${NOVNC_PORT:-6080}/vnc.html"\n    export DISPLAY=:1\n    sleep 2\n    cd /usr/local/esim/src/frontEnd\n    python3 Application.py\n    tail -f /dev/null\nelse\n    echo "Starting eSim in X11 mode"\n    cd /usr/local/esim/src/frontEnd\n    exec python3 Application.py\nfi\n' \
     > /usr/local/bin/start-esim.sh \
     && chmod +x /usr/local/bin/start-esim.sh
+
+# Create openbox config for better focus handling
+RUN mkdir -p /home/${USERNAME}/.config/openbox \
+    && printf '<?xml version="1.0" encoding="UTF-8"?>\n<openbox_config>\n<focus><focusNew>yes</focusNew><followMouse>no</followMouse><raiseOnFocus>yes</raiseOnFocus></focus>\n<placement><policy>Smart</policy></placement>\n</openbox_config>\n' \
+    > /home/${USERNAME}/.config/openbox/rc.xml \
+    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/openbox
+
+# Update VNC xstartup to use openbox instead of xfce4 for VNC sessions
+RUN printf '#!/bin/bash\nunset SESSION_MANAGER\nunset DBUS_SESSION_BUS_ADDRESS\nexport XDG_RUNTIME_DIR=/tmp/runtime-esim-user\nmkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR\nexec openbox-session\n' \
+    > /home/${USERNAME}/.vnc/xstartup \
+    && chmod +x /home/${USERNAME}/.vnc/xstartup \
+    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.vnc
 
 USER ${USERNAME}
 
