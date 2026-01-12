@@ -67,10 +67,13 @@ jobs:
         include:
           - os: windows-latest
             name: eSim-Launcher-Windows.exe
+            icon: assets/esim_logo.ico
           - os: ubuntu-latest
             name: eSim-Launcher-Linux
+            icon: ""
           - os: macos-latest
             name: eSim-Launcher-macOS
+            icon: assets/esim_logo.icns
 
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +84,16 @@ jobs:
 
       - run: pip install pyinstaller
 
-      - name: Build
+      - name: Build with icon (Windows)
+        if: matrix.os == 'windows-latest'
+        run: pyinstaller --onefile --console --name eSim-Launcher --icon=${{ matrix.icon }} run_esim_docker.py
+
+      - name: Build with icon (macOS)
+        if: matrix.os == 'macos-latest'
+        run: pyinstaller --onefile --console --name eSim-Launcher --icon=${{ matrix.icon }} run_esim_docker.py
+
+      - name: Build (Linux)
+        if: matrix.os == 'ubuntu-latest'
         run: pyinstaller --onefile --console --name eSim-Launcher run_esim_docker.py
 
       - name: Rename (Windows)
