@@ -65,10 +65,13 @@ ENV NOVNC_PORT=6080
 ENV VNC_RESOLUTION=1920x1080
 ENV VNC_DEPTH=24
 
-# Desktop settings
+# Desktop and font rendering settings
 ENV GTK_THEME=Adwaita
 ENV UBUNTU_MENUPROXY=0
 ENV XDG_DATA_DIRS=/usr/share:/usr/local/share:/usr/share/icons
+ENV QT_AUTO_SCREEN_SCALE_FACTOR=1
+ENV GDK_SCALE=1
+ENV FREETYPE_PROPERTIES="truetype:interpreter-version=40"
 
 # Install runtime packages
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -143,6 +146,12 @@ RUN mkdir -p /home/${USERNAME}/.config/xfce4/xfconf/xfce-perchannel-xml \
     && printf '<?xml version="1.0" encoding="UTF-8"?>\n<channel name="xfwm4" version="1.0">\n  <property name="general" type="empty">\n    <property name="focus_new" type="bool" value="true"/>\n    <property name="raise_on_focus" type="bool" value="true"/>\n    <property name="prevent_focus_stealing" type="bool" value="false"/>\n  </property>\n</channel>\n' \
     > /home/${USERNAME}/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config
+
+# Font rendering config for better VNC quality
+RUN mkdir -p /home/${USERNAME}/.config/fontconfig \
+    && printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <match target="font"><edit name="antialias" mode="assign"><bool>true</bool></edit></match>\n  <match target="font"><edit name="hinting" mode="assign"><bool>true</bool></edit></match>\n  <match target="font"><edit name="hintstyle" mode="assign"><const>hintslight</const></edit></match>\n  <match target="font"><edit name="rgba" mode="assign"><const>rgb</const></edit></match>\n</fontconfig>\n' \
+    > /home/${USERNAME}/.config/fontconfig/fonts.conf \
+    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/fontconfig
 
 # Startup script
 RUN printf '#!/bin/bash\nset -e\n\n# Ensure workspace exists\nmkdir -p /home/esim-user/eSim-Workspace\ncp -rn /usr/local/esim/Examples/* /home/esim-user/eSim-Workspace/ 2>/dev/null || true\n\nif [ "$1" = "--vnc" ] || [ "$USE_VNC" = "1" ]; then\n    echo "Starting eSim in VNC mode"\n    vncserver -kill :1 2>/dev/null || true\n    export XDG_RUNTIME_DIR=/tmp/runtime-esim-user\n    mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR\n    vncserver :1 -geometry ${VNC_RESOLUTION:-1920x1080} -depth ${VNC_DEPTH:-24} -SecurityTypes None\n    sleep 3\n    websockify --web=/usr/share/novnc/ ${NOVNC_PORT:-6080} localhost:5901 &\n    echo "VNC ready at http://localhost:${NOVNC_PORT:-6080}/vnc.html"\n    export DISPLAY=:1\n    sleep 2\n    cd /usr/local/esim/src/frontEnd\n    python3 Application.py\n    tail -f /dev/null\nelse\n    echo "Starting eSim in X11 mode"\n    cd /usr/local/esim/src/frontEnd\n    exec python3 Application.py\nfi\n' \

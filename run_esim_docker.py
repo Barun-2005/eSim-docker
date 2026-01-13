@@ -126,8 +126,36 @@ def open_url(url):
 
 
 def install_docker_windows():
-    """Install Docker on Windows via winget."""
-    info("Docker Desktop is not running or not installed.")
+    """Check Docker on Windows - try to start it, or install if needed."""
+    # First check if Docker Desktop is installed but not running
+    docker_paths = [
+        Path(os.environ.get("PROGRAMFILES", "")) / "Docker" / "Docker" / "Docker Desktop.exe",
+        Path(os.environ.get("LOCALAPPDATA", "")) / "Docker" / "Docker Desktop.exe",
+    ]
+    
+    docker_exe = None
+    for p in docker_paths:
+        if p.exists():
+            docker_exe = p
+            break
+    
+    if docker_exe:
+        info("Docker Desktop is installed but not running.")
+        resp = input("  Start Docker Desktop now? (y/n): ").strip().lower()
+        if resp == 'y':
+            try:
+                info("Starting Docker Desktop...")
+                subprocess.Popen([str(docker_exe)], creationflags=subprocess.DETACHED_PROCESS)
+                info("Docker Desktop is starting. Please wait 30-60 seconds...")
+                info("Then run this launcher again.")
+                input("\n  Press Enter to exit...")
+                return True
+            except Exception as e:
+                err(f"Failed to start: {e}")
+        return False
+    
+    # Docker not installed - offer to install
+    info("Docker Desktop is not installed.")
     print()
     print("  Docker Desktop is required to run eSim.")
     print()
@@ -138,7 +166,6 @@ def install_docker_windows():
         info("https://www.docker.com/products/docker-desktop")
         return False
     
-    # Check if winget exists
     if not cmd_exists("winget"):
         info("Opening Docker download page...")
         open_url("https://www.docker.com/products/docker-desktop")
