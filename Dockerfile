@@ -10,16 +10,17 @@ FROM ubuntu:22.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Asia/Kolkata
 
-# Install build tools
+# Install build tools (includes ghdl for NGHDL VHDL simulation support)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential gcc g++ make cmake git \
     python3 python3-pip python3-dev python3-venv \
     autoconf automake libtool pkg-config bison flex gettext wget \
-    libgtk-3-dev \
+    libgtk-3-dev ghdl \
     && rm -rf /var/lib/apt/lists/*
 
-# Clone eSim
-RUN git clone --depth 1 https://github.com/FOSSEE/eSim.git /build/esim
+# Clone eSim and NGHDL
+RUN git clone --depth 1 https://github.com/FOSSEE/eSim.git /build/esim \
+    && git clone --depth 1 https://github.com/FOSSEE/nghdl.git /build/nghdl
 
 # Setup Python venv with dependencies
 # Note: setuptools<58 is needed for hdlparse which uses deprecated use_2to3
@@ -73,10 +74,10 @@ ENV QT_AUTO_SCREEN_SCALE_FACTOR=1
 ENV GDK_SCALE=1
 ENV FREETYPE_PROPERTIES="truetype:interpreter-version=40"
 
-# Install runtime packages
+# Install runtime packages (includes ghdl for NGHDL VHDL simulation support)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     kicad kicad-libraries ngspice gtkwave xterm \
-    python3 python3-wxgtk4.0 \
+    python3 python3-wxgtk4.0 ghdl \
     libx11-6 libxext6 libxrender1 libxfixes3 libxi6 libxrandr2 \
     libxcursor1 libxinerama1 libgl1 libgl1-mesa-glx libgl1-mesa-dri \
     libxcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
@@ -95,6 +96,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=builder /build/gaw3-install/usr/local /usr/local/
 COPY --from=builder /build/esim ${ESIM_HOME}
 COPY --from=builder /build/venv /opt/venv
+COPY --from=builder /build/nghdl /opt/nghdl
 
 # Create user
 ARG USERNAME=esim-user
@@ -115,6 +117,12 @@ RUN mkdir -p /home/${USERNAME}/.esim \
     ${USERNAME} ${USERNAME} > /home/${USERNAME}/.esim/config.ini \
     && echo '{}' > /home/${USERNAME}/.esim/modelica_map.json \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.esim
+
+# Create NGHDL config (required by /opt/nghdl/src/ngspice_ghdl.py)
+RUN mkdir -p /home/${USERNAME}/.nghdl \
+    && printf '[NGHDL]\nNGHDL_HOME = /opt/nghdl\nRELEASE = /usr\nDIGITAL_MODEL = /usr/local/esim/library/modelParamXML/Nghdl\n\n[SRC]\nSRC_HOME = /opt/nghdl\nLICENSE = /opt/nghdl/LICENSE\n' \
+    > /home/${USERNAME}/.nghdl/config.ini \
+    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.nghdl
 
 # Setup KiCad symbol libraries
 RUN mkdir -p /home/${USERNAME}/.config/kicad/6.0 \
@@ -152,6 +160,12 @@ RUN mkdir -p /home/${USERNAME}/.config/fontconfig \
     && printf '<?xml version="1.0"?>\n<!DOCTYPE fontconfig SYSTEM "fonts.dtd">\n<fontconfig>\n  <match target="font"><edit name="antialias" mode="assign"><bool>true</bool></edit></match>\n  <match target="font"><edit name="hinting" mode="assign"><bool>true</bool></edit></match>\n  <match target="font"><edit name="hintstyle" mode="assign"><const>hintslight</const></edit></match>\n  <match target="font"><edit name="rgba" mode="assign"><const>rgb</const></edit></match>\n</fontconfig>\n' \
     > /home/${USERNAME}/.config/fontconfig/fonts.conf \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.config/fontconfig
+
+# NGHDL wrapper script - eSim checks for 'nghdl' executable via shutil.which()
+# NGHDL source: https://github.com/FOSSEE/nghdl (cloned to /opt/nghdl)
+RUN printf '#!/bin/bash\n# NGHDL wrapper for eSim Docker\ncd /opt/nghdl/src\nexport PYTHONPATH=/opt/nghdl/src:/usr/local/esim/src:${PYTHONPATH}\nexec python3 /opt/nghdl/src/ngspice_ghdl.py "$@"\n' \
+    > /usr/local/bin/nghdl \
+    && chmod +x /usr/local/bin/nghdl
 
 # Startup script
 RUN printf '#!/bin/bash\nset -e\n\n# Ensure workspace exists\nmkdir -p /home/esim-user/eSim-Workspace\ncp -rn /usr/local/esim/Examples/* /home/esim-user/eSim-Workspace/ 2>/dev/null || true\n\nif [ "$1" = "--vnc" ] || [ "$USE_VNC" = "1" ]; then\n    echo "Starting eSim in VNC mode"\n    vncserver -kill :1 2>/dev/null || true\n    export XDG_RUNTIME_DIR=/tmp/runtime-esim-user\n    mkdir -p $XDG_RUNTIME_DIR && chmod 700 $XDG_RUNTIME_DIR\n    vncserver :1 -geometry ${VNC_RESOLUTION:-1920x1080} -depth ${VNC_DEPTH:-24} -SecurityTypes None\n    sleep 3\n    websockify --web=/usr/share/novnc/ ${NOVNC_PORT:-6080} localhost:5901 &\n    echo "VNC ready at http://localhost:${NOVNC_PORT:-6080}/vnc.html"\n    export DISPLAY=:1\n    sleep 2\n    cd /usr/local/esim/src/frontEnd\n    python3 Application.py\n    tail -f /dev/null\nelse\n    echo "Starting eSim in X11 mode"\n    cd /usr/local/esim/src/frontEnd\n    exec python3 Application.py\nfi\n' \
