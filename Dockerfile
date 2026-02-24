@@ -98,11 +98,14 @@ COPY --from=builder /build/esim ${ESIM_HOME}
 COPY --from=builder /build/venv /opt/venv
 COPY --from=builder /build/nghdl /opt/nghdl
 
-# Extract NGHDL simulator source (Ngspice source for compiling VHDL code-models)
+# Extract NGHDL simulator source and patch ngspice_ghdl.py for Docker compatibility
 RUN cd /opt/nghdl && tar -xf nghdl-simulator-source.tar.xz \
     && mkdir -p /usr/local/esim/library/modelParamXML/Nghdl/ghdl \
     && touch /usr/local/esim/library/modelParamXML/Nghdl/ghdl/modpath.lst \
-    && rm -f nghdl-simulator-source.tar.xz
+    && rm -f nghdl-simulator-source.tar.xz \
+    && sed -i '/error in .make/{ n; s/sys.exit()/return/ }' /opt/nghdl/src/ngspice_ghdl.py \
+    && sed -i '/Exiting application/{ n; s/sys.exit()/return/ }' /opt/nghdl/src/ngspice_ghdl.py \
+    && ln -sf /usr/local/esim/library/kicadLibrary/eSim-symbols/eSim_Nghdl.kicad_sym /usr/share/kicad/symbols/eSim_Nghdl.kicad_sym
 
 # Create user
 ARG USERNAME=esim-user
