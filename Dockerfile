@@ -101,7 +101,8 @@ COPY --from=builder /build/nghdl /opt/nghdl
 # Extract NGHDL simulator source (Ngspice source for compiling VHDL code-models)
 RUN cd /opt/nghdl && tar -xf nghdl-simulator-source.tar.xz \
     && mkdir -p /usr/local/esim/library/modelParamXML/Nghdl/ghdl \
-    && touch /usr/local/esim/library/modelParamXML/Nghdl/ghdl/modpath.lst
+    && touch /usr/local/esim/library/modelParamXML/Nghdl/ghdl/modpath.lst \
+    && rm -f nghdl-simulator-source.tar.xz
 
 # Create user
 ARG USERNAME=esim-user
@@ -112,7 +113,8 @@ RUN groupadd --gid ${USER_GID} ${USERNAME} \
     && useradd --uid ${USER_UID} --gid ${USER_GID} -m ${USERNAME} \
     && mkdir -p /home/${USERNAME}/workspace \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME} \
-    && chown -R ${USERNAME}:${USERNAME} ${ESIM_HOME}
+    && chown -R ${USERNAME}:${USERNAME} ${ESIM_HOME} \
+    && chown -R ${USERNAME}:${USERNAME} /opt/nghdl
 
 WORKDIR ${ESIM_HOME}/src/frontEnd
 
