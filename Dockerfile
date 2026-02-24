@@ -77,7 +77,7 @@ ENV FREETYPE_PROPERTIES="truetype:interpreter-version=40"
 # Install runtime packages (includes ghdl for NGHDL VHDL simulation support)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     kicad kicad-libraries ngspice gtkwave xterm \
-    python3 python3-wxgtk4.0 ghdl \
+    python3 python3-wxgtk4.0 ghdl xz-utils make \
     libx11-6 libxext6 libxrender1 libxfixes3 libxi6 libxrandr2 \
     libxcursor1 libxinerama1 libgl1 libgl1-mesa-glx libgl1-mesa-dri \
     libxcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
@@ -97,6 +97,11 @@ COPY --from=builder /build/gaw3-install/usr/local /usr/local/
 COPY --from=builder /build/esim ${ESIM_HOME}
 COPY --from=builder /build/venv /opt/venv
 COPY --from=builder /build/nghdl /opt/nghdl
+
+# Extract NGHDL simulator source (Ngspice source for compiling VHDL code-models)
+RUN cd /opt/nghdl && tar -xf nghdl-simulator-source.tar.xz \
+    && mkdir -p /usr/local/esim/library/modelParamXML/Nghdl/ghdl \
+    && touch /usr/local/esim/library/modelParamXML/Nghdl/ghdl/modpath.lst
 
 # Create user
 ARG USERNAME=esim-user
@@ -120,9 +125,10 @@ RUN mkdir -p /home/${USERNAME}/.esim \
 
 # Create NGHDL config (required by /opt/nghdl/src/ngspice_ghdl.py)
 RUN mkdir -p /home/${USERNAME}/.nghdl \
-    && printf '[NGHDL]\nNGHDL_HOME = /opt/nghdl\nRELEASE = /usr\nDIGITAL_MODEL = /usr/local/esim/library/modelParamXML/Nghdl\n\n[SRC]\nSRC_HOME = /opt/nghdl\nLICENSE = /opt/nghdl/LICENSE\n' \
+    && printf '[NGHDL]\nNGHDL_HOME = /opt/nghdl\nRELEASE = /opt/nghdl/nghdl-simulator-source\nDIGITAL_MODEL = /usr/local/esim/library/modelParamXML/Nghdl\n\n[SRC]\nSRC_HOME = /opt/nghdl\nLICENSE = /opt/nghdl/LICENSE\n' \
     > /home/${USERNAME}/.nghdl/config.ini \
-    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.nghdl
+    && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.nghdl \
+    && chown -R ${USERNAME}:${USERNAME} /usr/local/esim/library/modelParamXML/Nghdl
 
 # Setup KiCad symbol libraries
 RUN mkdir -p /home/${USERNAME}/.config/kicad/6.0 \
