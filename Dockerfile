@@ -77,7 +77,7 @@ ENV FREETYPE_PROPERTIES="truetype:interpreter-version=40"
 # Install runtime packages (includes ghdl for NGHDL VHDL simulation support)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     kicad kicad-libraries ngspice gtkwave xterm \
-    python3 python3-wxgtk4.0 ghdl xz-utils make \
+    python3 python3-wxgtk4.0 ghdl gcc xz-utils make \
     libx11-6 libxext6 libxrender1 libxfixes3 libxi6 libxrandr2 \
     libxcursor1 libxinerama1 libgl1 libgl1-mesa-glx libgl1-mesa-dri \
     libxcb1 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
@@ -120,7 +120,7 @@ WORKDIR ${ESIM_HOME}/src/frontEnd
 
 # Create eSim config
 RUN mkdir -p /home/${USERNAME}/.esim \
-    && printf '[DEFAULT]\nworkspace=/home/%s/eSim-Workspace\n\n[eSim]\nworkspace=/home/%s/eSim-Workspace\nkicad=/usr/bin\nngspice=/usr/bin\n' \
+    && printf '[DEFAULT]\nworkspace=/home/%s/eSim-Workspace\n\n[eSim]\nworkspace=/home/%s/eSim-Workspace\neSim_HOME=/usr/local/esim\nkicad=/usr/bin\nngspice=/usr/bin\n' \
     ${USERNAME} ${USERNAME} > /home/${USERNAME}/.esim/config.ini \
     && echo '{}' > /home/${USERNAME}/.esim/modelica_map.json \
     && chown -R ${USERNAME}:${USERNAME} /home/${USERNAME}/.esim
